@@ -314,6 +314,31 @@ class SccCaptionParagraphTest(unittest.TestCase):
     self.assertIsInstance(children[2], Span)
     self.assertEqual("World", list(children[2])[0].get_text())
 
+  def test_to_paragraph_with_start_tc_applies_offset(self):
+    caption_paragraph = SccCaptionParagraph()
+    caption_paragraph.set_id("test-id")
+    caption_paragraph.set_begin(SmpteTimeCode.parse("00:01:02:03", FPS_30))
+    caption_paragraph.set_end(SmpteTimeCode.parse("00:01:03:03", FPS_30))
+
+    start_tc = SmpteTimeCode.parse("00:00:01:00", FPS_30)
+
+    doc = ContentDocument()
+    paragraph = caption_paragraph.to_paragraph(doc, start_tc)
+
+    self.assertEqual(Fraction(1833, 30), paragraph.get_begin())
+    self.assertEqual(Fraction(1863, 30), paragraph.get_end())
+
+  def test_to_paragraph_start_tc_df_ndf_mismatch_raises_error(self):
+    caption_paragraph = SccCaptionParagraph()
+    caption_paragraph.set_id("test-id")
+    caption_paragraph.set_begin(SmpteTimeCode.parse("00:01:02:03", FPS_30))
+
+    start_tc = SmpteTimeCode.parse("00:00:01;00", FPS_30)
+
+    doc = ContentDocument()
+    with self.assertRaisesRegex(RuntimeError, "drop-frame"):
+      caption_paragraph.to_paragraph(doc, start_tc)
+
 
 if __name__ == '__main__':
   unittest.main()

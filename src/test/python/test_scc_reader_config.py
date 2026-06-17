@@ -49,6 +49,7 @@ class SccReaderConfigurationTest(unittest.TestCase):
     scc_reader_configuration = SccReaderConfiguration.parse(config_dict)
 
     self.assertEqual(scc_reader_configuration, SccReaderConfiguration(text_align=TextAlignment.AUTO))
+    self.assertIsNone(scc_reader_configuration.start_tc)
 
   def test_scc_reader_config_parsing_right_value(self):
     config_json = """{"text_align": "right" }"""
@@ -79,8 +80,16 @@ class SccReaderConfigurationTest(unittest.TestCase):
     config_dict = json.loads(config_json)
 
     scc_reader_configuration = SccReaderConfiguration.parse(config_dict)
-
     self.assertEqual(scc_reader_configuration, SccReaderConfiguration(text_align=TextAlignment.AUTO))
+
+  def test_scc_reader_config_parsing_start_tc(self):
+    config_json = """{"start_tc": "01:00:00;00"}"""
+    config_dict = json.loads(config_json)
+
+    scc_reader_configuration = SccReaderConfiguration.parse(config_dict)
+
+    self.assertEqual(scc_reader_configuration, SccReaderConfiguration(start_tc="01:00:00;00"))
+
 
 if __name__ == '__main__':
   unittest.main()

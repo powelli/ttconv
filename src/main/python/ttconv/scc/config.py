@@ -95,6 +95,11 @@ class SccReaderConfiguration(ModuleConfiguration):
     metadata={"decoder": TextAlignment.from_value}
   )
 
+  start_tc: typing.Optional[str] = field(
+    default=None,
+    metadata={"decoder": lambda y: str(y) if y is not None else None}
+  )
+
   @classmethod
   def name(cls):
     return "scc_reader"

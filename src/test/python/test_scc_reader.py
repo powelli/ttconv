@@ -35,6 +35,7 @@ from ttconv import model
 from ttconv.isd import ISD
 from ttconv.model import Br, P, ContentElement, CellResolutionType, Span
 from ttconv.scc.codes.attribute_codes import SccAttributeCode
+from ttconv.scc.config import SccReaderConfiguration
 from ttconv.scc.reader import to_model, to_disassembly
 from ttconv.style_properties import StyleProperties, CoordinateType, LengthType, FontStyleType, NamedColors, TextDecorationType, \
   StyleProperty, ExtentType, ColorType, DisplayAlignType, ShowBackgroundType
@@ -1540,6 +1541,126 @@ Scenarist_SCC V1.0
 
     self.check_caption(p_list[0], "caption1", "01:03:28:21", None, "HEY, THERE.")
     self.assertEqual(region_1, p_list[0].get_region())
+
+
+  def _check_simple_paint_on_caption(self, doc, expected_begin, expected_end):
+    body = doc.get_body()
+    div = list(body)[0]
+    p_list = list(div)
+    self.assertEqual(1, len(p_list))
+
+    span_list = list(p_list[0])
+    self.assertEqual(5, len(span_list))
+
+    expected_texts = ["Lorem ", "ipsum ", "dolor ", "sit ", "amet,"]
+    for i, span in enumerate(span_list):
+      texts = list(span)
+      self.assertEqual(1, len(texts))
+      self.assertEqual(expected_texts[i], texts[0].get_text())
+
+    self.check_caption(p_list[0], "caption1", expected_begin, expected_end, *expected_texts)
+
+  def test_offset_start_tc_reversal_drop_frame(self):
+    scc_content = """\
+Scenarist_SCC V1.0
+
+01:00:05;00	9429 9429 94d2 94d2 4c6f 7265 6d20 6970 7375 6d20 646f 6c6f 7220 7369 7420 616d 6574 2c80
+
+01:00:07;00	942c 942c
+"""
+
+    doc = to_model(scc_content, SccReaderConfiguration(start_tc="01:00:00;00"))
+    self.assertIsNotNone(doc)
+
+    self._check_simple_paint_on_caption(doc, "00:00:05;02", "00:00:07;00")
+
+  def test_offset_start_tc_reversal_non_drop(self):
+    scc_content = """\
+Scenarist_SCC V1.0
+
+01:00:05:00	9429 9429 94d2 94d2 4c6f 7265 6d20 6970 7375 6d20 646f 6c6f 7220 7369 7420 616d 6574 2c80
+
+01:00:07:00	942c 942c
+"""
+
+    doc = to_model(scc_content, SccReaderConfiguration(start_tc="01:00:00:00"))
+    self.assertIsNotNone(doc)
+
+    self._check_simple_paint_on_caption(doc, "00:00:05:02", "00:00:07:00")
+
+  def test_offset_start_tc_no_offset(self):
+    scc_content = """\
+Scenarist_SCC V1.0
+
+01:00:05;00	9429 9429 94d2 94d2 4c6f 7265 6d20 6970 7375 6d20 646f 6c6f 7220 7369 7420 616d 6574 2c80
+
+01:00:07;00	942c 942c
+"""
+
+    doc = to_model(scc_content)
+    self.assertIsNotNone(doc)
+
+    self._check_simple_paint_on_caption(doc, "01:00:05;02", "01:00:07;00")
+
+  def test_offset_start_tc_negative_raises_error(self):
+    scc_content = """\
+Scenarist_SCC V1.0
+
+00:00:00;00	9429 9429 94d2 94d2 4c6f 7265 6d20 6970 7375 6d20 646f 6c6f 7220 7369 7420 616d 6574 2c80
+
+00:00:02;00	942c 942c
+"""
+
+    with self.assertRaisesRegex(RuntimeError, "negative timestamp"):
+      to_model(scc_content, SccReaderConfiguration(start_tc="01:00:00;00"))
+
+  def test_offset_start_tc_round_trip(self):
+    import xml.etree.ElementTree as et
+    import ttconv.imsc.reader as imsc_reader
+    import ttconv.scc.writer as scc_writer
+    from ttconv.scc.config import SccWriterConfiguration
+
+    ttml_doc_str = """<?xml version="1.0" encoding="UTF-8"?>
+<tt xml:lang="en" xmlns="http://www.w3.org/ns/ttml"
+    xmlns:ttp="http://www.w3.org/ns/ttml#parameter"
+    ttp:frameRate="30">
+  <body>
+    <div>
+      <p begin="00:00:03.500" end="00:45:15.250">Hello</p>
+     </div>
+  </body>
+</tt>"""
+
+    model = imsc_reader.to_model(et.ElementTree(et.fromstring(ttml_doc_str)))
+    scc_content = scc_writer.from_model(model, SccWriterConfiguration(start_tc="01:00:00;00"))
+
+    rt_model = to_model(scc_content, SccReaderConfiguration(start_tc="01:00:00;00"))
+    self.assertIsNotNone(rt_model)
+
+    body = rt_model.get_body()
+    div = list(body)[0]
+    p_list = list(div)
+    self.assertEqual(1, len(p_list))
+
+    expected_begin = round(float(Fraction("3.5")) * 1000)
+    actual_begin = round(float(p_list[0].get_begin()) * 1000)
+    self.assertAlmostEqual(expected_begin, actual_begin, delta=35)
+
+    expected_end = round(float(Fraction("2715.25")) * 1000)
+    actual_end = round(float(p_list[0].get_end()) * 1000)
+    self.assertAlmostEqual(expected_end, actual_end, delta=35)
+
+  def test_offset_start_tc_df_ndf_mismatch_raises_error(self):
+    scc_content = """\
+Scenarist_SCC V1.0
+
+01:00:05:00	9429 9429 94d2 94d2 4c6f 7265 6d20 6970 7375 6d20 646f 6c6f 7220 7369 7420 616d 6574 2c80
+
+01:00:07:00	942c 942c
+"""
+
+    with self.assertRaisesRegex(RuntimeError, "drop-frame"):
+      to_model(scc_content, SccReaderConfiguration(start_tc="01:00:00;00"))
 
 
 if __name__ == '__main__':

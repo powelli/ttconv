@@ -42,7 +42,7 @@ from ttconv.scc.codes.preambles_address_codes import SccPreambleAddressCode
 from ttconv.scc.config import SccReaderConfiguration, TextAlignment
 from ttconv.scc.word import SccWord
 from ttconv.style_properties import StyleProperties
-from ttconv.time_code import SmpteTimeCode
+from ttconv.time_code import FPS_29_97, SmpteTimeCode
 
 ROLL_UP_BASE_ROW = 15
 
@@ -89,6 +89,9 @@ class SccContext:
 
     # Text alignment
     self.text_alignment = TextAlignment.AUTO if config is None else config.text_align
+
+    # Start timecode offset (reverses writer's start_tc)
+    self.start_tc = SmpteTimeCode.parse(config.start_tc, FPS_29_97) if (config is not None and config.start_tc is not None) else None
 
     self.new_buffered_caption()
 
@@ -159,7 +162,7 @@ class SccContext:
         self.active_caption = None
 
       if not previous_caption.is_empty():
-        self.div.push_child(previous_caption.to_paragraph(self.div.get_doc()))
+        self.div.push_child(previous_caption.to_paragraph(self.div.get_doc(), self.start_tc))
 
   def backspace(self, time_code: SmpteTimeCode):
     """Move the cursors in a column to the left"""

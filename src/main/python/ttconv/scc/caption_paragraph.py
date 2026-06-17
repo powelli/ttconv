@@ -28,6 +28,7 @@
 import copy
 import logging
 import math
+from fractions import Fraction
 from math import ceil
 from typing import Optional, List, Dict, Union
 
@@ -315,7 +316,7 @@ class SccCaptionParagraph:
     LOGGER.warning("Cannot define the paragraph text alignment. Set it to default left-aligned.")
     return TextAlignType.start
 
-  def to_paragraph(self, doc: ContentDocument) -> P:
+  def to_paragraph(self, doc: ContentDocument, start_tc: Optional[SmpteTimeCode] = None) -> P:
     """Converts and returns current caption paragraph into P instance"""
 
     # Set up a new paragraph
@@ -323,10 +324,21 @@ class SccCaptionParagraph:
     p.set_doc(doc)
     p.set_id(self._caption_id)
 
+    offset = start_tc.to_temporal_offset() if start_tc is not None else Fraction(0)
+
+    if start_tc is not None and self._begin is not None:
+      if start_tc.is_drop_frame() != self._begin.is_drop_frame():
+        raise RuntimeError(
+          "The drop-frame status of the specified start timecode does not match the SCC content"
+        )
+
     if self._begin is not None:
-      p.set_begin(self._begin.to_temporal_offset())
+      begin_offset = self._begin.to_temporal_offset() - offset
+      if begin_offset < 0:
+        raise RuntimeError("Offset adjustment would produce a negative timestamp")
+      p.set_begin(begin_offset)
     if self._end is not None:
-      p.set_end(self._end.to_temporal_offset())
+      p.set_end(self._end.to_temporal_offset() - offset)
 
     # Set the region to current caption
     region = _SccParagraphRegion(self, doc)
@@ -356,21 +368,21 @@ class SccCaptionParagraph:
 
         if caption_text.get_begin() is not None:
 
-          begin = caption_text.get_begin().to_temporal_offset()
+          begin = caption_text.get_begin().to_temporal_offset() - offset
 
           if self.get_caption_style() is SccCaptionStyle.PaintOn:
             # Compute paragraph-relative begin time
-            begin -= self._begin.to_temporal_offset()
+            begin -= (self._begin.to_temporal_offset() - offset)
 
           span.set_begin(begin)
 
         if caption_text.get_end() is not None:
 
-          end = caption_text.get_end().to_temporal_offset()
+          end = caption_text.get_end().to_temporal_offset() - offset
 
           if self.get_caption_style() is SccCaptionStyle.PaintOn:
             # Compute paragraph-relative end time
-            end -= self._end.to_temporal_offset()
+            end -= (self._end.to_temporal_offset() - offset)
 
           span.set_end(end)
 
